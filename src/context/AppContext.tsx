@@ -54,6 +54,10 @@ interface AppContextType {
     markArticleRead: (id: number, isRead: boolean) => void;
     markArticleSaved: (id: number, isSaved: boolean) => void;
     importOpml: () => Promise<void>;
+    createGroup: (name: string) => Promise<void>;
+    renameGroup: (id: number, name: string) => Promise<void>;
+    deleteGroup: (id: number) => Promise<void>;
+    moveFeedToGroup: (feedId: number, groupId: number | null) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -141,6 +145,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await window.ipcRenderer.invoke('mark-saved', { id, isSaved });
     };
 
+    const createGroup = async (name: string) => {
+        await window.ipcRenderer.invoke('create-group', name);
+        await loadData();
+    };
+
+    const renameGroup = async (id: number, name: string) => {
+        await window.ipcRenderer.invoke('rename-group', { id, name });
+        await loadData();
+    };
+
+    const deleteGroup = async (id: number) => {
+        await window.ipcRenderer.invoke('delete-group', id);
+        await loadData();
+    };
+
+    const moveFeedToGroup = async (feedId: number, groupId: number | null) => {
+        await window.ipcRenderer.invoke('move-feed-to-group', { feedId, groupId });
+        await loadData();
+        // Also update local state optimistically if needed, but loadData is fast enough for now
+    };
+
     const value = {
         feeds,
         groups,
@@ -162,7 +187,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         selectArticle: setSelectedArticleId,
         markArticleRead,
         markArticleSaved,
-        importOpml
+        importOpml,
+        createGroup,
+        renameGroup,
+        deleteGroup,
+        moveFeedToGroup
     };
 
     return (

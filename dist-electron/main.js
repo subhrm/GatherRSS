@@ -228,6 +228,39 @@ function markArticleSaved(articleId, isSaved = true) {
 function deleteFeed(feedId) {
   db.prepare("DELETE FROM feeds WHERE id = ?").run(feedId);
 }
+function createGroup(name) {
+  const insert = db.prepare("INSERT INTO groups (name) VALUES (?) RETURNING *");
+  return insert.get(name);
+}
+function renameGroup(id, name) {
+  db.prepare("UPDATE groups SET name = ? WHERE id = ?").run(name, id);
+}
+function deleteGroup(id) {
+  const transaction = db.transaction(() => {
+    db.prepare("UPDATE feeds SET group_id = NULL WHERE group_id = ?").run(id);
+    db.prepare("DELETE FROM groups WHERE id = ?").run(id);
+  });
+  transaction();
+}
+function moveFeedToGroup(feedId, groupId) {
+  db.prepare("UPDATE feeds SET group_id = ? WHERE id = ?").run(groupId, feedId);
+}
+const feedService = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  addFeed,
+  createGroup,
+  deleteFeed,
+  deleteGroup,
+  getArticleContent,
+  getArticles,
+  getFeeds,
+  getGroups,
+  markArticleRead,
+  markArticleSaved,
+  moveFeedToGroup,
+  refreshAllFeeds,
+  renameGroup
+}, Symbol.toStringTag, { value: "Module" }));
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path$1.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -283,6 +316,10 @@ app.whenReady().then(() => {
   ipcMain.handle("mark-read", (_e, { id, isRead }) => markArticleRead(id, isRead));
   ipcMain.handle("mark-saved", (_e, { id, isSaved }) => markArticleSaved(id, isSaved));
   ipcMain.handle("delete-feed", (_e, id) => deleteFeed(id));
+  ipcMain.handle("create-group", (_e, name) => Promise.resolve().then(() => feedService).then((m) => m.createGroup(name)));
+  ipcMain.handle("rename-group", (_e, { id, name }) => Promise.resolve().then(() => feedService).then((m) => m.renameGroup(id, name)));
+  ipcMain.handle("delete-group", (_e, id) => Promise.resolve().then(() => feedService).then((m) => m.deleteGroup(id)));
+  ipcMain.handle("move-feed-to-group", (_e, { feedId, groupId }) => Promise.resolve().then(() => feedService).then((m) => m.moveFeedToGroup(feedId, groupId)));
   setInterval(() => {
     console.log("Background polling...");
     refreshAllFeeds();

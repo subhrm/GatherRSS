@@ -106,6 +106,16 @@ app.whenReady().then(() => {
   ipcMain.handle('mark-saved', (_e, { id, isSaved }) => markArticleSaved(id, isSaved));
   ipcMain.handle('delete-feed', (_e, id) => deleteFeed(id));
 
+  // Group Management
+  // @ts-ignore
+  ipcMain.handle('create-group', (_e, name) => import('./feed-service').then(m => m.createGroup(name)));
+  // @ts-ignore
+  ipcMain.handle('rename-group', (_e, { id, name }) => import('./feed-service').then(m => m.renameGroup(id, name)));
+  // @ts-ignore
+  ipcMain.handle('delete-group', (_e, id) => import('./feed-service').then(m => m.deleteGroup(id)));
+  // @ts-ignore
+  ipcMain.handle('move-feed-to-group', (_e, { feedId, groupId }) => import('./feed-service').then(m => m.moveFeedToGroup(feedId, groupId)));
+
   // Background Polling (Simple interval for now)
   setInterval(() => {
     console.log('Background polling...');

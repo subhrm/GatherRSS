@@ -3,6 +3,7 @@ import { useApp, Group, Feed } from '../../context/AppContext';
 import {
     Plus,
     Folder,
+    FolderPlus,
     FolderOpen,
     Rss,
     Settings,
@@ -10,7 +11,9 @@ import {
     Bookmark,
     ChevronRight,
     ChevronDown,
-    Activity
+    Activity,
+    Trash2,
+    Edit2
 } from 'lucide-react';
 
 interface TreeNode {
@@ -32,13 +35,30 @@ export function Sidebar() {
         selectGroup,
         selectFilter,
         addFeed,
+        createGroup,
+        renameGroup,
+        deleteGroup,
+        moveFeedToGroup,
         importOpml,
         setShowSettings
     } = useApp();
 
     const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
     const [showAddFeed, setShowAddFeed] = useState(false);
+    const [showAddGroup, setShowAddGroup] = useState(false);
     const [newFeedUrl, setNewFeedUrl] = useState('');
+    const [newGroupName, setNewGroupName] = useState('');
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        type: 'group' | 'feed';
+        id: number;
+    } | null>(null);
+
+    // Editing State (Rename)
+    const [editingNode, setEditingNode] = useState<{ type: 'group', id: number, name: string } | null>(null);
 
     const toggleGroup = (groupId: number) => {
         const next = new Set(expandedGroups);
@@ -101,11 +121,71 @@ export function Sidebar() {
         setShowAddFeed(false);
     };
 
+    const handleAddGroup = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newGroupName) return;
+        await createGroup(newGroupName);
+        setNewGroupName('');
+        setShowAddGroup(false);
+    };
+
+    const handleRename = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingNode || !editingNode.name) return;
+        await renameGroup(editingNode.id, editingNode.name);
+        setEditingNode(null);
+    };
+
+    const handleContextMenu = (e: React.MouseEvent, node: TreeNode) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            type: node.type,
+            id: node.id
+        });
+    };
+
+    const handleDragStart = (e: React.DragEvent, node: TreeNode) => {
+        if (node.type === 'feed') {
+            e.dataTransfer.setData('feedId', node.id.toString());
+            e.dataTransfer.effectAllowed = 'move';
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent, node: TreeNode) => {
+        if (node.type === 'group') {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            e.currentTarget.classList.add('bg-blue-600/10');
+        } else if (node.type === 'feed' && !(node.data as Feed).group_id) {
+            // Optional: Allow dropping on root feeds to move out of folder?
+            // Or allow dropping on "All Feeds" area?
+            // For now, only folders.
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.currentTarget.classList.remove('bg-blue-600/10');
+    };
+
+    const handleDrop = async (e: React.DragEvent, targetNode: TreeNode) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove('bg-blue-600/10');
+        const feedId = e.dataTransfer.getData('feedId');
+
+        if (feedId && targetNode.type === 'group') {
+            await moveFeedToGroup(parseInt(feedId), targetNode.id);
+        }
+    };
+
     const renderNode = (node: TreeNode, depth = 0) => {
         const isExpanded = node.type === 'group' && expandedGroups.has(node.id);
         const isSelected =
             (node.type === 'feed' && selectedFeedId === node.id) ||
             (node.type === 'group' && selectedGroupId === node.id);
+        const isEditing = editingNode?.id === node.id && editingNode?.type === node.type;
 
         return (
             <div key={`${node.type}-${node.id}`}>
@@ -125,6 +205,12 @@ export function Sidebar() {
                             selectFeed(node.id);
                         }
                     }}
+                    onContextMenu={(e) => handleContextMenu(e, node)}
+                    draggable={node.type === 'feed'}
+                    onDragStart={(e) => handleDragStart(e, node)}
+                    onDragOver={(e) => handleDragOver(e, node)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, node)}
                 >
                     {node.type === 'group' && (
                         <span className="mr-1 opacity-70">
@@ -139,7 +225,20 @@ export function Sidebar() {
                             <Rss size={16} className={isSelected ? "text-blue-400" : "text-orange-400/80"} />
                         </div>
                     )}
-                    <span className="truncate flex-1">{node.title}</span>
+
+                    {isEditing ? (
+                        <form onSubmit={handleRename} className="flex-1" onClick={e => e.stopPropagation()}>
+                            <input
+                                autoFocus
+                                className="w-full bg-[#111] border border-blue-500 rounded px-1 py-0.5 text-xs text-white outline-none"
+                                value={editingNode.name}
+                                onChange={e => setEditingNode({ ...editingNode, name: e.target.value })}
+                                onBlur={() => setEditingNode(null)}
+                            />
+                        </form>
+                    ) : (
+                        <span className="truncate flex-1">{node.title}</span>
+                    )}
                 </div>
 
                 {node.type === 'group' && isExpanded && node.children && (
@@ -152,7 +251,70 @@ export function Sidebar() {
     };
 
     return (
-        <div className="w-64 bg-[#111111] flex flex-col h-full border-r border-[#222]">
+        <div
+            className="w-64 bg-[#111111] flex flex-col h-full border-r border-[#222] relative"
+            onClick={() => setContextMenu(null)}
+        >
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="fixed z-50 bg-[#222] border border-[#333] rounded-md shadow-xl py-1 w-48 animate-in fade-in zoom-in-95 duration-100"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {contextMenu.type === 'group' ? (
+                        <>
+                            <button
+                                className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-blue-600 hover:text-white flex items-center gap-2"
+                                onClick={() => {
+                                    const group = groups.find(g => g.id === contextMenu.id);
+                                    if (group) setEditingNode({ type: 'group', id: group.id, name: group.name });
+                                    setContextMenu(null);
+                                }}
+                            >
+                                <Edit2 size={14} /> Rename
+                            </button>
+                            <button
+                                className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 flex items-center gap-2"
+                                onClick={() => {
+                                    if (confirm('Are you sure? Feeds will be moved to root.')) {
+                                        deleteGroup(contextMenu.id);
+                                    }
+                                    setContextMenu(null);
+                                }}
+                            >
+                                <Trash2 size={14} /> Delete
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Move to...</div>
+                            <button
+                                className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-blue-600 hover:text-white pl-6"
+                                onClick={() => {
+                                    moveFeedToGroup(contextMenu.id, null);
+                                    setContextMenu(null);
+                                }}
+                            >
+                                Root
+                            </button>
+                            {groups.map(group => (
+                                <button
+                                    key={group.id}
+                                    className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-blue-600 hover:text-white pl-6 truncate"
+                                    onClick={() => {
+                                        moveFeedToGroup(contextMenu.id, group.id);
+                                        setContextMenu(null);
+                                    }}
+                                >
+                                    {group.name}
+                                </button>
+                            ))}
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* Header / Brand */}
             <div className="h-14 px-4 flex items-center justify-between shrink-0 drag">
                 <div className="flex items-center gap-2.5">
@@ -161,13 +323,22 @@ export function Sidebar() {
                     </div>
                     <span className="font-bold text-gray-100 text-base tracking-tight">Gather<span className="text-blue-500">RSS</span></span>
                 </div>
-                <button
-                    onClick={() => setShowAddFeed(!showAddFeed)}
-                    className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors no-drag"
-                    title="Add Feed"
-                >
-                    <Plus size={18} />
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={() => setShowAddGroup(!showAddGroup)}
+                        className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors no-drag"
+                        title="New Folder"
+                    >
+                        <FolderPlus size={18} />
+                    </button>
+                    <button
+                        onClick={() => setShowAddFeed(!showAddFeed)}
+                        className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors no-drag"
+                        title="Add Feed"
+                    >
+                        <Plus size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* Add Feed Input */}
@@ -186,6 +357,29 @@ export function Sidebar() {
                             type="submit"
                             className="absolute right-1 top-1 p-1 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors"
                             disabled={!newFeedUrl}
+                        >
+                            <Plus size={14} />
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* Add Group Input */}
+            {showAddGroup && (
+                <div className="px-3 pb-3 animate-in slide-in-from-top-2 duration-200">
+                    <form onSubmit={handleAddGroup} className="relative">
+                        <input
+                            type="text"
+                            value={newGroupName}
+                            onChange={(e) => setNewGroupName(e.target.value)}
+                            placeholder="Folder name..."
+                            className="w-full pl-3 pr-8 py-2 bg-[#1a1a1a] border border-[#333] rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                            autoFocus
+                        />
+                        <button
+                            type="submit"
+                            className="absolute right-1 top-1 p-1 bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors"
+                            disabled={!newGroupName}
                         >
                             <Plus size={14} />
                         </button>

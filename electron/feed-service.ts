@@ -157,3 +157,27 @@ export function markArticleSaved(articleId: number, isSaved: boolean = true) {
 export function deleteFeed(feedId: number) {
     db.prepare('DELETE FROM feeds WHERE id = ?').run(feedId);
 }
+
+export function createGroup(name: string) {
+    const insert = db.prepare('INSERT INTO groups (name) VALUES (?) RETURNING *');
+    return insert.get(name);
+}
+
+export function renameGroup(id: number, name: string) {
+    db.prepare('UPDATE groups SET name = ? WHERE id = ?').run(name, id);
+}
+
+export function deleteGroup(id: number) {
+    // Transaction to remove group and move feeds to root
+    const transaction = db.transaction(() => {
+        // Move feeds to root (group_id = NULL)
+        db.prepare('UPDATE feeds SET group_id = NULL WHERE group_id = ?').run(id);
+        // Delete group
+        db.prepare('DELETE FROM groups WHERE id = ?').run(id);
+    });
+    transaction();
+}
+
+export function moveFeedToGroup(feedId: number, groupId: number | null) {
+    db.prepare('UPDATE feeds SET group_id = ? WHERE id = ?').run(groupId, feedId);
+}

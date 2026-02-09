@@ -13,7 +13,10 @@ import {
     ChevronDown,
     Activity,
     Trash2,
-    Edit2
+    Edit2,
+    Download,
+    Info,
+    Loader2
 } from 'lucide-react';
 
 interface TreeNode {
@@ -35,6 +38,7 @@ export function Sidebar() {
         selectGroup,
         selectFilter,
         addFeed,
+        syncFeed,
         createGroup,
         renameGroup,
         deleteGroup,
@@ -59,6 +63,12 @@ export function Sidebar() {
 
     // Editing State (Rename)
     const [editingNode, setEditingNode] = useState<{ type: 'group', id: number, name: string } | null>(null);
+
+    // Syncing State
+    const [syncingFeedId, setSyncingFeedId] = useState<number | null>(null);
+
+    // Info Modal State
+    const [showFeedInfo, setShowFeedInfo] = useState<{ feedId: number; feedUrl: string } | null>(null);
 
     const toggleGroup = (groupId: number) => {
         const next = new Set(expandedGroups);
@@ -180,6 +190,25 @@ export function Sidebar() {
         }
     };
 
+    const handleSyncFeed = async (e: React.MouseEvent, feedId: number) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (syncingFeedId !== null) return; // Prevent multiple concurrent syncs
+
+        setSyncingFeedId(feedId);
+        try {
+            await syncFeed(feedId);
+        } finally {
+            setSyncingFeedId(null);
+        }
+    };
+
+    const handleShowFeedInfo = (e: React.MouseEvent, feed: Feed) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setShowFeedInfo({ feedId: feed.id, feedUrl: feed.url });
+    };
+
     const renderNode = (node: TreeNode, depth = 0) => {
         const isExpanded = node.type === 'group' && expandedGroups.has(node.id);
         const isSelected =
@@ -191,7 +220,7 @@ export function Sidebar() {
             <div key={`${node.type}-${node.id}`}>
                 <div
                     className={`
-                        flex items-center px-3 py-2 mx-2 rounded-md cursor-pointer text-sm transition-all duration-200 select-none
+                        group flex items-center px-3 py-2 mx-2 rounded-md cursor-pointer text-sm transition-all duration-200 select-none
                         ${isSelected
                             ? 'bg-blue-600/20 text-blue-100 font-medium'
                             : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}
@@ -237,7 +266,32 @@ export function Sidebar() {
                             />
                         </form>
                     ) : (
-                        <span className="truncate flex-1">{node.title}</span>
+                        <>
+                            <span className="truncate flex-1">{node.title}</span>
+                            {node.type === 'feed' && (
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={(e) => handleSyncFeed(e, node.id)}
+                                        className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-blue-400 transition-colors"
+                                        title="Sync feed"
+                                        disabled={syncingFeedId !== null}
+                                    >
+                                        {syncingFeedId === node.id ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                            <Download size={14} />
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={(e) => handleShowFeedInfo(e, node.data as Feed)}
+                                        className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-blue-400 transition-colors"
+                                        title="Feed info"
+                                    >
+                                        <Info size={14} />
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -312,6 +366,54 @@ export function Sidebar() {
                             ))}
                         </>
                     )}
+                </div>
+            )}
+
+            {/* Feed Info Modal */}
+            {showFeedInfo && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-in fade-in duration-200"
+                    onClick={() => setShowFeedInfo(null)}
+                >
+                    <div
+                        className="bg-[#1a1a1a] border border-[#333] rounded-lg shadow-2xl p-5 w-96 animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-semibold text-gray-100 mb-3">Feed Information</h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">Feed URL</label>
+                                <div className="mt-1 flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={showFeedInfo.feedUrl}
+                                        readOnly
+                                        className="flex-1 bg-[#111] border border-[#333] rounded px-3 py-2 text-sm text-gray-300 font-mono"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(showFeedInfo.feedUrl);
+                                        }}
+                                        className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+                                        title="Copy to clipboard"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z" />
+                                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-5 flex justify-end">
+                            <button
+                                onClick={() => setShowFeedInfo(null)}
+                                className="px-4 py-2 bg-[#222] hover:bg-[#2a2a2a] text-gray-300 rounded transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

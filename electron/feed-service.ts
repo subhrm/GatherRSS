@@ -46,6 +46,29 @@ export async function addFeed(url: string, groupId: number | null = null) {
     }
 }
 
+export async function refreshFeed(feedId: number) {
+    try {
+        const feed = db.prepare('SELECT id, url, title FROM feeds WHERE id = ?').get(feedId) as { id: number, url: string, title: string } | undefined;
+
+        if (!feed) {
+            throw new Error(`Feed not found: ${feedId}`);
+        }
+
+        console.log(`Refreshing feed: ${feed.title} (${feed.id})...`);
+        const parsed = await parser.parseURL(feed.url);
+        saveArticles(feed.id, parsed.items);
+
+        // Update feed updated_at
+        db.prepare('UPDATE feeds SET updated_at = datetime("now") WHERE id = ?').run(feed.id);
+
+        console.log(`Successfully refreshed feed: ${feed.title}`);
+        return { success: true, feedId: feed.id, title: feed.title };
+    } catch (error) {
+        console.error(`Failed to refresh feed ${feedId}:`, error);
+        return { success: false, message: 'Failed to refresh feed: ' + (error as Error).message };
+    }
+}
+
 export async function refreshAllFeeds() {
     const feeds = db.prepare('SELECT id, url FROM feeds').all() as { id: number, url: string }[];
     console.log(`Refreshing ${feeds.length} feeds...`);

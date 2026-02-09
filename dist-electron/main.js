@@ -147,6 +147,23 @@ async function addFeed(url, groupId = null) {
     return { success: false, message: "Failed to add feed: " + error.message };
   }
 }
+async function refreshFeed(feedId) {
+  try {
+    const feed = db.prepare("SELECT id, url, title FROM feeds WHERE id = ?").get(feedId);
+    if (!feed) {
+      throw new Error(`Feed not found: ${feedId}`);
+    }
+    console.log(`Refreshing feed: ${feed.title} (${feed.id})...`);
+    const parsed = await parser.parseURL(feed.url);
+    saveArticles(feed.id, parsed.items);
+    db.prepare('UPDATE feeds SET updated_at = datetime("now") WHERE id = ?').run(feed.id);
+    console.log(`Successfully refreshed feed: ${feed.title}`);
+    return { success: true, feedId: feed.id, title: feed.title };
+  } catch (error) {
+    console.error(`Failed to refresh feed ${feedId}:`, error);
+    return { success: false, message: "Failed to refresh feed: " + error.message };
+  }
+}
 async function refreshAllFeeds() {
   const feeds = db.prepare("SELECT id, url FROM feeds").all();
   console.log(`Refreshing ${feeds.length} feeds...`);
@@ -259,6 +276,7 @@ const feedService = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineP
   markArticleSaved,
   moveFeedToGroup,
   refreshAllFeeds,
+  refreshFeed,
   renameGroup
 }, Symbol.toStringTag, { value: "Module" }));
 const __dirname$1 = path$1.dirname(fileURLToPath(import.meta.url));
@@ -308,6 +326,9 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("refresh-feeds", async () => {
     return await refreshAllFeeds();
+  });
+  ipcMain.handle("sync-feed", async (_event, feedId) => {
+    return await refreshFeed(feedId);
   });
   ipcMain.handle("get-feeds", () => getFeeds());
   ipcMain.handle("get-groups", () => getGroups());

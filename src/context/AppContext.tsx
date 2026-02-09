@@ -46,6 +46,7 @@ interface AppContextType {
     setShowSettings: (show: boolean) => void;
     isLoading: boolean;
     refreshFeeds: () => Promise<void>;
+    syncFeed: (feedId: number) => Promise<void>;
     addFeed: (url: string) => Promise<{ success: boolean; message?: string }>;
     selectFeed: (feedId: number | null) => void;
     selectGroup: (groupId: number | null) => void;
@@ -119,6 +120,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
     };
 
+    const syncFeed = async (feedId: number) => {
+        await window.ipcRenderer.invoke('sync-feed', feedId);
+        await loadData();
+        await loadArticles();
+    };
+
     const addFeed = async (url: string) => {
         const result = await window.ipcRenderer.invoke('add-feed', url);
         if (result.success) {
@@ -180,6 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setShowSettings,
         isLoading,
         refreshFeeds,
+        syncFeed,
         addFeed,
         selectFeed: (id: number | null) => { setSelectedFeedId(id); setSelectedGroupId(null); },
         selectGroup: (id: number | null) => { setSelectedGroupId(id); setSelectedFeedId(null); },

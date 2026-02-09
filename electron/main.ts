@@ -7,6 +7,7 @@ import { importOpml } from './opml'
 import {
   addFeed,
   refreshAllFeeds,
+  refreshFeed,
   getFeeds,
   getGroups,
   getArticles,
@@ -95,6 +96,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('refresh-feeds', async () => {
     return await refreshAllFeeds();
+  });
+
+  ipcMain.handle('sync-feed', async (_event, feedId) => {
+    return await refreshFeed(feedId);
   });
 
   ipcMain.handle('get-feeds', () => getFeeds());

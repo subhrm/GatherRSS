@@ -104,7 +104,7 @@ export function getGroups() {
 
 export function getArticles(feedId?: number, groupId?: number, filter: 'all' | 'unread' | 'saved' = 'all') {
     let query = `
-    SELECT a.id, a.feed_id, a.title, a.author, a.published_at, a.url, a.is_read, a.is_saved, f.title as feed_title, f.icon_url
+    SELECT a.id, a.feed_id, a.title, a.content, a.author, a.published_at, a.url, a.is_read, a.is_saved, f.title as feed_title, f.icon_url
     FROM articles a
     JOIN feeds f ON a.feed_id = f.id
   `;

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 // import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -40,6 +40,70 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
+// Track opened browser windows for cleanup
+const browserWindows = new Set<BrowserWindow>()
+
+async function createBrowserWindow(url: string) {
+  if (!win) return
+
+  // Get current theme from main app
+  let theme = 'system'
+  try {
+    theme = await win.webContents.executeJavaScript(
+      'localStorage.getItem("theme") || "system"'
+    )
+  } catch (error) {
+    console.error('Failed to get theme:', error)
+  }
+
+  // Resolve actual theme if system
+  let actualTheme = theme
+  if (theme === 'system') {
+    actualTheme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light'
+  }
+
+  // Create new browser window
+  const browserWin = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  // Track window
+  browserWindows.add(browserWin)
+
+  // Clean up on close
+  browserWin.on('closed', () => {
+    browserWindows.delete(browserWin)
+  })
+
+  // Inject theme CSS and class after page loads
+  browserWin.webContents.on('did-finish-load', () => {
+    // Inject minimal theme CSS
+    browserWin.webContents.insertCSS(`
+      :root.dark {
+        color-scheme: dark;
+        background-color: #0a0a0a !important;
+      }
+      :root.light {
+        color-scheme: light;
+        background-color: #ffffff !important;
+      }
+    `)
+
+    // Apply theme class to html element
+    browserWin.webContents.executeJavaScript(`
+      document.documentElement.classList.add('${actualTheme}');
+    `).catch(err => console.error('Failed to apply theme class:', err))
+  })
+
+  // Load the URL
+  browserWin.loadURL(url)
+}
+
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
@@ -51,6 +115,15 @@ function createWindow() {
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
+  })
+
+  // Handle external links with theme support
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // Create new browser window in the background
+    createBrowserWindow(url)
+
+    // Prevent default new window behavior
+    return { action: 'deny' }
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -110,6 +183,20 @@ app.whenReady().then(() => {
   ipcMain.handle('mark-read', (_e, { id, isRead }) => markArticleRead(id, isRead));
   ipcMain.handle('mark-saved', (_e, { id, isSaved }) => markArticleSaved(id, isSaved));
   ipcMain.handle('delete-feed', (_e, id) => deleteFeed(id));
+
+  // Theme Management
+  ipcMain.handle('get-current-theme', async () => {
+    if (!win) return 'system';
+    try {
+      const theme = await win.webContents.executeJavaScript(
+        'localStorage.getItem("theme") || "system"'
+      );
+      return theme;
+    } catch (error) {
+      console.error('Failed to get theme:', error);
+      return 'system';
+    }
+  });
 
   // Group Management
   // @ts-ignore

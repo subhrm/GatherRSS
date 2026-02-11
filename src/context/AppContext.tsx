@@ -32,6 +32,8 @@ export interface Article {
     icon_url?: string;
 }
 
+export type Theme = 'system' | 'dark' | 'light';
+
 interface AppContextType {
     feeds: Feed[];
     groups: Group[];
@@ -44,6 +46,8 @@ interface AppContextType {
     setSearchQuery: (query: string) => void;
     showSettings: boolean;
     setShowSettings: (show: boolean) => void;
+    theme: Theme;
+    setTheme: (theme: Theme) => void;
     isLoading: boolean;
     refreshFeeds: () => Promise<void>;
     syncFeed: (feedId: number) => Promise<void>;
@@ -74,6 +78,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [showSettings, setShowSettings] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Theme state with localStorage persistence
+    const [theme, setThemeState] = useState<Theme>(() => {
+        const saved = localStorage.getItem('theme');
+        return (saved as Theme) || 'system';
+    });
+
+    // Apply theme to document
+    useEffect(() => {
+        const applyTheme = () => {
+            const root = document.documentElement;
+            
+            if (theme === 'system') {
+                const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                root.classList.toggle('dark', systemPrefersDark);
+                root.classList.toggle('light', !systemPrefersDark);
+            } else {
+                root.classList.toggle('dark', theme === 'dark');
+                root.classList.toggle('light', theme === 'light');
+            }
+        };
+
+        applyTheme();
+        localStorage.setItem('theme', theme);
+
+        // Listen for system theme changes when in system mode
+        if (theme === 'system') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            const handleChange = () => applyTheme();
+            mediaQuery.addEventListener('change', handleChange);
+            return () => mediaQuery.removeEventListener('change', handleChange);
+        }
+    }, [theme]);
 
     const loadData = useCallback(async () => {
         try {
@@ -185,6 +222,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setSearchQuery,
         showSettings,
         setShowSettings,
+        theme,
+        setTheme: setThemeState,
         isLoading,
         refreshFeeds,
         syncFeed,

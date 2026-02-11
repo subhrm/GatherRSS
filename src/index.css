@@ -14,14 +14,66 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: var(--color-gray-950);
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode (default) */
+:root,
+:root.dark {
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: var(--color-gray-950);
+}
+
+/* Light mode */
+:root.light {
+  color-scheme: light;
+  color: rgba(0, 0, 0, 0.87);
+  background-color: #ffffff;
+}
+
+/* Light mode overrides for main app components */
+:root.light .bg-black {
+  background-color: #f5f5f5 !important;
+}
+
+:root.light .bg-gray-950 {
+  background-color: #ffffff !important;
+}
+
+:root.light .bg-gray-900 {
+  background-color: #f9fafb !important;
+}
+
+:root.light .bg-gray-800 {
+  background-color: #f3f4f6 !important;
+}
+
+:root.light .text-white {
+  color: #111827 !important;
+}
+
+:root.light .text-gray-200 {
+  color: #374151 !important;
+}
+
+:root.light .text-gray-400 {
+  color: #6b7280 !important;
+}
+
+:root.light .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+:root.light .text-gray-600 {
+  color: #4b5563 !important;
+}
+
+:root.light .border-gray-800 {
+  border-color: #e5e7eb !important;
 }
 
 /* Custom Scrollbar for Webkit */

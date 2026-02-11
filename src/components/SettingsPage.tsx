@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Moon, Sun, Monitor, Trash2 } from 'lucide-react';
 
 export function SettingsPage({ onClose }: { onClose: () => void }) {
-    const { feeds, refreshFeeds } = useApp();
+    const { feeds, refreshFeeds, theme, setTheme } = useApp();
 
     return (
         <div className="absolute inset-0 bg-gray-950 z-50 flex flex-col">
@@ -17,15 +17,33 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
                 <section className="mb-10">
                     <h3 className="text-lg font-semibold text-gray-200 mb-4 border-b border-gray-800 pb-2">Appearance</h3>
                     <div className="grid grid-cols-3 gap-4">
-                        <button className="flex flex-col items-center p-4 bg-gray-900 rounded-lg border border-blue-500 text-blue-400">
+                        <button
+                            onClick={() => setTheme('system')}
+                            className={`flex flex-col items-center p-4 bg-gray-900 rounded-lg border transition-colors ${theme === 'system'
+                                    ? 'border-blue-500 text-blue-400'
+                                    : 'border-gray-800 text-gray-400 hover:border-gray-700'
+                                }`}
+                        >
                             <Monitor size={24} className="mb-2" />
                             <span>System</span>
                         </button>
-                        <button className="flex flex-col items-center p-4 bg-gray-900 rounded-lg border border-gray-800 text-gray-400 hover:border-gray-700">
+                        <button
+                            onClick={() => setTheme('dark')}
+                            className={`flex flex-col items-center p-4 bg-gray-900 rounded-lg border transition-colors ${theme === 'dark'
+                                    ? 'border-blue-500 text-blue-400'
+                                    : 'border-gray-800 text-gray-400 hover:border-gray-700'
+                                }`}
+                        >
                             <Moon size={24} className="mb-2" />
                             <span>Dark</span>
                         </button>
-                        <button className="flex flex-col items-center p-4 bg-gray-900 rounded-lg border border-gray-800 text-gray-400 hover:border-gray-700">
+                        <button
+                            onClick={() => setTheme('light')}
+                            className={`flex flex-col items-center p-4 bg-gray-900 rounded-lg border transition-colors ${theme === 'light'
+                                    ? 'border-blue-500 text-blue-400'
+                                    : 'border-gray-800 text-gray-400 hover:border-gray-700'
+                                }`}
+                        >
                             <Sun size={24} className="mb-2" />
                             <span>Light</span>
                         </button>

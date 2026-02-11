@@ -1,4 +1,4 @@
-import { app, dialog, BrowserWindow, ipcMain } from "electron";
+import { app, dialog, BrowserWindow, ipcMain, nativeTheme } from "electron";
 import { fileURLToPath } from "node:url";
 import path$1 from "node:path";
 import Database from "better-sqlite3";
@@ -286,6 +286,50 @@ const MAIN_DIST = path$1.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path$1.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path$1.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
+const browserWindows = /* @__PURE__ */ new Set();
+async function createBrowserWindow(url) {
+  if (!win) return;
+  let theme = "system";
+  try {
+    theme = await win.webContents.executeJavaScript(
+      'localStorage.getItem("theme") || "system"'
+    );
+  } catch (error) {
+    console.error("Failed to get theme:", error);
+  }
+  let actualTheme = theme;
+  if (theme === "system") {
+    actualTheme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  }
+  const browserWin = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  browserWindows.add(browserWin);
+  browserWin.on("closed", () => {
+    browserWindows.delete(browserWin);
+  });
+  browserWin.webContents.on("did-finish-load", () => {
+    browserWin.webContents.insertCSS(`
+      :root.dark {
+        color-scheme: dark;
+        background-color: #0a0a0a !important;
+      }
+      :root.light {
+        color-scheme: light;
+        background-color: #ffffff !important;
+      }
+    `);
+    browserWin.webContents.executeJavaScript(`
+      document.documentElement.classList.add('${actualTheme}');
+    `).catch((err) => console.error("Failed to apply theme class:", err));
+  });
+  browserWin.loadURL(url);
+}
 function createWindow() {
   win = new BrowserWindow({
     icon: path$1.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
@@ -295,6 +339,10 @@ function createWindow() {
   });
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    createBrowserWindow(url);
+    return { action: "deny" };
   });
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
@@ -337,6 +385,18 @@ app.whenReady().then(() => {
   ipcMain.handle("mark-read", (_e, { id, isRead }) => markArticleRead(id, isRead));
   ipcMain.handle("mark-saved", (_e, { id, isSaved }) => markArticleSaved(id, isSaved));
   ipcMain.handle("delete-feed", (_e, id) => deleteFeed(id));
+  ipcMain.handle("get-current-theme", async () => {
+    if (!win) return "system";
+    try {
+      const theme = await win.webContents.executeJavaScript(
+        'localStorage.getItem("theme") || "system"'
+      );
+      return theme;
+    } catch (error) {
+      console.error("Failed to get theme:", error);
+      return "system";
+    }
+  });
   ipcMain.handle("create-group", (_e, name) => Promise.resolve().then(() => feedService).then((m) => m.createGroup(name)));
   ipcMain.handle("rename-group", (_e, { id, name }) => Promise.resolve().then(() => feedService).then((m) => m.renameGroup(id, name)));
   ipcMain.handle("delete-group", (_e, id) => Promise.resolve().then(() => feedService).then((m) => m.deleteGroup(id)));
